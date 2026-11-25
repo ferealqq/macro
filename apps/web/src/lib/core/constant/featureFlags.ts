@@ -294,6 +294,16 @@ export const ENABLE_EMAIL = defineFlag({
   default: true,
 }).enabled;
 
+/**
+ * Self-hosted build. Off in the hosted product. The self-host image sets
+ * `VITE_SELF_HOST=true`. Not a PostHog flag: a deployment either is
+ * self-hosted or it is not. Stays off in dev so `just run_local` is unchanged.
+ */
+export const selfHost = defineFlag({
+  env: 'SELF_HOST',
+  default: false,
+});
+
 export const ENABLE_BLOCK_IN_BLOCK = defineFlag({
   env: 'ENABLE_BLOCK_IN_BLOCK',
   default: true,

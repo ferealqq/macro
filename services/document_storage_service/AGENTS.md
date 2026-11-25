@@ -29,6 +29,9 @@ threads, pins, recents, notifications, folders, activity.
   `no_scope_reaches_graphql_where_it_is_mounted` holds `agent_correlation`'s
   `ANY_WRITE` to that mount) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
+- `src/self_host_connectors.rs`: when `MACRO_SELF_HOST` is set, the
+  `/cognition/connectors` routes and the MCP OAuth callback are mounted
+  here so Slack connect does not need the agent service.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.

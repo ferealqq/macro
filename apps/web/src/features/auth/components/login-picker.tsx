@@ -8,6 +8,8 @@ export function LoginPicker(props: {
   /** Sign in with Apple is required for App Store review and iOS-only. */
   showApple: boolean;
   showMicrosoft: boolean;
+  /** Google is always offered on the hosted product. Self-host hides it until configured. */
+  showGoogle?: boolean;
   onGoogle: () => void;
   onMicrosoft: () => void;
   onApple: () => void;
@@ -15,16 +17,18 @@ export function LoginPicker(props: {
 }) {
   return (
     <div class="flex flex-col gap-3">
-      <AuthButton autofocus onClick={props.onGoogle}>
-        <IconGoogle
-          viewBox="0 0 24 24"
-          class="size-5 shrink-0"
-          fill="currentColor"
-          stroke="none"
-          aria-hidden="true"
-        />
-        Continue with Google
-      </AuthButton>
+      <Show when={props.showGoogle !== false}>
+        <AuthButton autofocus onClick={props.onGoogle}>
+          <IconGoogle
+            viewBox="0 0 24 24"
+            class="size-5 shrink-0"
+            fill="currentColor"
+            stroke="none"
+            aria-hidden="true"
+          />
+          Continue with Google
+        </AuthButton>
+      </Show>
       <Show when={props.showMicrosoft}>
         <AuthButton variant="secondary" onClick={props.onMicrosoft}>
           <IconMicrosoft class="size-[18px] shrink-0" aria-hidden="true" />

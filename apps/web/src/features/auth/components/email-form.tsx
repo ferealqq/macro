@@ -1,5 +1,6 @@
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import { selfHostEnabled } from '@core/self-host';
 import { Show } from 'solid-js';
 import { AuthButton, FormError, FormInput } from './form-fields';
 
@@ -23,7 +24,9 @@ export function EmailForm(props: {
       }}
     >
       <p class="text-xs text-ink-muted leading-snug">
-        We’ll send a one-time code to verify.
+        {selfHostEnabled()
+          ? 'Sign in with your email and a password. A new address creates an account.'
+          : 'We’ll send a one-time code to verify.'}
       </p>
       <FormInput
         id="email"
@@ -32,7 +35,7 @@ export function EmailForm(props: {
         value={props.email}
         onInput={props.onEmailInput}
       />
-      <Show when={props.passwordRequired}>
+      <Show when={props.passwordRequired || selfHostEnabled()}>
         <FormInput
           id="password"
           type="password"

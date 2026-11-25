@@ -91,6 +91,7 @@ use model::user::{
                 login::passwordless::handler,
                 login::sso::handler,
                 login::password::handler,
+                login::signup::handler,
                 login::apple::handler,
 
                 /// /logout

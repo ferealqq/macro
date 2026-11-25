@@ -7,12 +7,13 @@ import {
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableMicrosoftSignup } from '@core/constant/featureFlags';
+import { selfHostEnabled } from '@core/self-host';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { deepEqual } from '@core/util/compareUtils';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import { createMemo, onMount } from 'solid-js';
+import { createMemo, createSignal, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
 import { AuthProvider, type AuthUser } from './context/auth-context';
 import { sessionTokenParam } from './core/email-code';
@@ -36,13 +37,35 @@ export function Login(props: { signupMode?: boolean }) {
   const email = typeof params.email === 'string' ? params.email : undefined;
   const microsoftSignup = useFeatureFlag(enableMicrosoftSignup);
   const webSignup = () =>
-    props.signupMode === true && !isNativeMobilePlatform();
+    props.signupMode === true &&
+    !isNativeMobilePlatform() &&
+    !selfHostEnabled();
+  // Google is offered when the server published a client. The file is
+  // written by the self-host proxy; hosted builds never request it.
+  const [showGoogle, setShowGoogle] = createSignal(!selfHostEnabled());
+  onMount(() => {
+    if (!selfHostEnabled()) return;
+    fetch('/selfhost.json')
+      .then((response) => (response.ok ? response.json() : undefined))
+      .then((body: unknown) => {
+        if (
+          body &&
+          typeof body === 'object' &&
+          'google' in body &&
+          body.google === true
+        ) {
+          setShowGoogle(true);
+        }
+      })
+      .catch(() => undefined);
+  });
   return (
     <AuthProvider value={createAppAuthContext()}>
       <AuthView
         intent={props.signupMode ? 'signup' : 'login'}
-        showApple={getNativeMobilePlatform() === 'ios'}
-        showMicrosoft={microsoftSignup().enabled}
+        showApple={selfHostEnabled() ? false : getNativeMobilePlatform() === 'ios'}
+        showGoogle={showGoogle()}
+        showMicrosoft={selfHostEnabled() ? false : microsoftSignup().enabled}
         compact={virtualKeyboardVisible()}
         initialEmail={email}
         // Dev persona links (`?email=`) sign straight in against a local backend.
@@ -123,7 +146,7 @@ function PostAuthGate(props: { user: AuthUser; redirect: unknown }) {
       postAuthTarget({
         tutorialComplete: props.user.tutorialComplete,
         isAgent: props.user.isAgent,
-        onboardsOnThisDevice: !isNativeMobilePlatform(),
+        onboardsOnThisDevice: !isNativeMobilePlatform() && !selfHostEnabled(),
         redirect: props.redirect,
       }),
     undefined,

@@ -8,6 +8,8 @@ item-level sharing — see Scope).
 ## Start here
 
 - `src/domain/model.rs`: the role/permission types.
+- `src/domain/self_host.rs`: `MACRO_SELF_HOST` grants every account the Max
+  roles and permissions. Hosted processes leave the variable unset.
 - `src/domain/port.rs` + `src/domain/service.rs`: the port trait and its
   default implementation.
 - `src/outbound/pgpool.rs`: the Postgres adapter (`outbound` feature).

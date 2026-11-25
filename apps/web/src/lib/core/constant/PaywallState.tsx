@@ -1,3 +1,4 @@
+import { selfHostEnabled } from '@core/self-host';
 import { createSignal } from 'solid-js';
 
 const DAILY_LIMIT = 5;
@@ -94,6 +95,9 @@ const [paywallKey, setPaywallKey] = createSignal<PaywallKey | null>(null);
 
 export const usePaywallState = () => {
   const showPaywall = (errorKey?: PaywallKey | null) => {
+    // Self-host has no plans to upgrade to. A 403 from a missing service
+    // must not open the paywall.
+    if (selfHostEnabled()) return;
     if (errorKey) {
       setPaywallKey(errorKey);
     }

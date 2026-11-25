@@ -41,6 +41,8 @@ export function AuthView(props: {
   showApple: boolean;
   /** Continue with Microsoft, behind `enable-microsoft-signup`. */
   showMicrosoft?: boolean;
+  /** Continue with Google. Self-host turns this off until an OAuth client is set. */
+  showGoogle?: boolean;
   /** The header yields to the on-screen keyboard on phones. */
   compact: boolean;
   initialEmail?: string;
@@ -124,6 +126,7 @@ export function AuthView(props: {
             <Stepper.Step>
               <LoginPicker
                 showApple={props.showApple}
+                showGoogle={props.showGoogle}
                 showMicrosoft={props.showMicrosoft === true}
                 onGoogle={() =>
                   fireAndForget(

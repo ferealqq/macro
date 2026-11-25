@@ -36,7 +36,27 @@ pub async fn get_user_permissions(
         result.insert(user_permission.permission_id);
     }
 
+    // Same switch as `roles_and_permissions::domain::self_host`. This query
+    // does not go through that service, and the license endpoint reads it.
+    if self_host_enabled() {
+        result.insert("read:professional_features".to_string());
+        result.insert("write:ai_features".to_string());
+        result.insert("write:proai".to_string());
+    }
+
     Ok(result)
+}
+
+/// `MACRO_SELF_HOST` set to a true-ish value. Read on each call: this crate
+/// has no process-wide flag of its own, and the lookup is not hot.
+fn self_host_enabled() -> bool {
+    matches!(
+        std::env::var("MACRO_SELF_HOST")
+            .ok()
+            .as_deref()
+            .map(str::trim),
+        Some("1") | Some("true") | Some("TRUE") | Some("yes") | Some("YES")
+    )
 }
 
 #[cfg(test)]

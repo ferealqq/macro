@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+# Production web bundle for the self-hosted server. Vite inlines
+# VITE_SELF_HOST and the same-origin proxy hosts at build time.
+
+FROM oven/bun:1 AS build
+WORKDIR /app
+
+ARG GITHUB_PACKAGES_TOKEN=""
+RUN printf '[install.scopes]\nmacro-inc = { token = "%s", url = "https://npm.pkg.github.com" }\n' \
+    "${GITHUB_PACKAGES_TOKEN}" > /root/.bunfig.toml
+
+COPY . .
+RUN bun install --frozen-lockfile
+
+ENV VITE_SELF_HOST=true
+ENV VITE_LOCAL_SERVERS=ALL
+ENV VITE_LOCAL_BACKEND_ORIGIN=same-origin
+ENV VITE_LOCAL_STACK=true
+ENV MODE=production
+ENV NODE_ENV=production
+
+WORKDIR /app/apps/web
+RUN bun run build
+
+FROM caddy:2-alpine
+COPY --from=build /app/apps/web/dist /srv/frontend
+COPY selfhost/Caddyfile /etc/caddy/Caddyfile

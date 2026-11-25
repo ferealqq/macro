@@ -435,6 +435,24 @@ async fn run_server() -> anyhow::Result<()> {
         db.clone(),
     )));
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
+    // Slack and the other MCP connectors. Empty when self-host is off, or
+    // when the MCP credentials key was not configured.
+    let self_host_connectors = if crate::self_host_connectors::enabled() {
+        match connectors.as_ref() {
+            Some(composed) => Some(crate::self_host_connectors::router(
+                composed,
+                authorization_state.clone(),
+            )),
+            None => {
+                tracing::warn!(
+                    "MACRO_SELF_HOST is set but MCP_CREDENTIALS_KEY_SECRET_NAME is unset; connector routes are off"
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
     let harnesses_service = harnesses::domain::service::HarnessServiceImpl::new(
         PgHarnessRepo::new(db.clone()),
         hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
@@ -3107,7 +3125,7 @@ async fn run_server() -> anyhow::Result<()> {
         });
     }
 
-    let server_result = api::setup_and_serve(api_context).await;
+    let server_result = api::setup_and_serve(api_context, self_host_connectors).await;
 
     tracing::info!("stopping event consumers");
     consumer_cancellation_token.cancel();

@@ -1,0 +1,60 @@
+# syntax=docker/dockerfile:1
+# Self-host service image. One image, several binaries, so the VPS does not
+# compile Rust. The hosted product's deploy images are unchanged.
+
+FROM oven/bun:1.3.5 AS bun
+FROM rust:1.94.0-bookworm AS build
+
+# rust-toolchain.toml would make rustup re-download the channel. The image
+# already has 1.94.0.
+ENV RUSTUP_TOOLCHAIN=1.94.0
+ENV SQLX_OFFLINE=true
+ENV CARGO_BUILD_JOBS=2
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cmake \
+    g++ \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    pkg-config \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+
+WORKDIR /app
+COPY . .
+
+# document_storage_service compiles code_mode_assets, which generates the
+# agent SDK bundle with bun unless CODE_MODE_ASSETS_DIR is already set.
+RUN bun install --frozen-lockfile
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git/db,sharing=locked \
+    --mount=type=cache,target=/app/target,id=selfhost-rust,sharing=locked \
+    cargo build --release --locked \
+      --bin authentication_service \
+      --bin document_storage_service \
+      --bin connection_gateway_service \
+      --bin static_file_service \
+      --bin document_upload_finalizer_local_worker \
+    && mkdir -p /out \
+    && cp \
+      target/release/authentication_service \
+      target/release/document_storage_service \
+      target/release/connection_gateway_service \
+      target/release/static_file_service \
+      target/release/document_upload_finalizer_local_worker \
+      /out/
+
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    dumb-init \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /out/ /usr/local/bin/
+ENV PORT=8080
+EXPOSE 8080
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["authentication_service"]
