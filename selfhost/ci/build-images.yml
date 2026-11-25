@@ -1,0 +1,46 @@
+# Image build for the self-hosted stack.
+#
+# This file is not under .github/workflows. Those workflows are generated
+# from tooling/xtask and a hand-written file there fails `cargo x workflows
+# --check`. Copy this job into a generated workflow module when you want
+# GitHub to publish images, or run selfhost/install.sh on the server, which
+# builds the same Dockerfiles.
+#
+# Registry: ghcr.io/<owner>/macro-selfhost-{services,web,sync,lexical,search}
+
+name: self-host images
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: services
+            file: selfhost/Dockerfile.services
+          - name: web
+            file: selfhost/Dockerfile.frontend
+          - name: sync
+            file: docker/sync-service.Dockerfile
+          - name: lexical
+            file: docker/lexical-service.Dockerfile
+          - name: search
+            file: infra/local/opensearch/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/macro-selfhost-${{ matrix.name }}:latest

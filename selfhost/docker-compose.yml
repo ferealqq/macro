@@ -1,0 +1,248 @@
+# Self-hosted Macro: docs, tasks, and the GitHub and Slack connect flows.
+# Bring it up with selfhost/install.sh. Images are built from this file; a
+# registry prefix can replace the build (IMAGE_PREFIX / IMAGE_TAG).
+
+name: macro-selfhost
+
+x-rust: &rust
+  image: ${IMAGE_PREFIX:-macro-selfhost}/services:${IMAGE_TAG:-local}
+  build:
+    context: ..
+    dockerfile: selfhost/Dockerfile.services
+  env_file: [.env]
+  restart: unless-stopped
+  mem_limit: 384m
+  logging: &log
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "3"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    command: postgres -c max_connections=80 -c shared_buffers=64MB
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      FUSIONAUTH_DB_PASSWORD: ${FUSIONAUTH_DB_PASSWORD}
+    volumes:
+      - postgres:/var/lib/postgresql
+      - ./postgres/init-fusionauth.sh:/docker-entrypoint-initdb.d/10-fusionauth.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      retries: 30
+    restart: unless-stopped
+    mem_limit: 512m
+    logging: *log
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru --save 60 1
+    volumes: [redis:/data]
+    restart: unless-stopped
+    mem_limit: 96m
+    logging: *log
+
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: "-Xmx192m -Xms96m"
+      KAFKA_LOG_RETENTION_HOURS: 24
+      CLUSTER_ID: TWFjcm9TZWxmSG9zdEthZmth
+    volumes: [kafka:/var/lib/kafka/data]
+    restart: unless-stopped
+    mem_limit: 384m
+    logging: *log
+
+  search:
+    build:
+      context: ../infra/local/opensearch
+    image: ${IMAGE_PREFIX:-macro-selfhost}/search:${IMAGE_TAG:-local}
+    environment:
+      cluster.name: search
+      discovery.type: single-node
+      node.name: search
+      bootstrap.memory_lock: "false"
+      OPENSEARCH_JAVA_OPTS: "-Xms192m -Xmx192m"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes: [search:/usr/share/opensearch/data]
+    restart: unless-stopped
+    mem_limit: 512m
+    logging: *log
+
+  localstack:
+    image: localstack/localstack:4
+    environment:
+      SERVICES: sqs,dynamodb,s3,kms
+      PERSISTENCE: 1
+    volumes: [localstack:/var/lib/localstack]
+    restart: unless-stopped
+    mem_limit: 512m
+    logging: *log
+
+  localstack-init:
+    image: amazon/aws-cli:2.22.35
+    entrypoint: ["/bin/sh", "/init.sh"]
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+    volumes: [./localstack/init.sh:/init.sh:ro]
+    depends_on: [localstack]
+    restart: "no"
+    mem_limit: 128m
+
+  fusionauth:
+    image: fusionauth/fusionauth-app:1.62.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/fusionauth
+      DATABASE_USERNAME: fusionauth
+      DATABASE_PASSWORD: ${FUSIONAUTH_DB_PASSWORD}
+      FUSIONAUTH_APP_KICKSTART_FILE: /usr/local/fusionauth/kickstart/kickstart.json
+      FUSIONAUTH_APP_MEMORY: 256M
+      FUSIONAUTH_APP_RUNTIME_MODE: production
+      FUSIONAUTH_APP_URL: https://${DOMAIN}
+      SEARCH_TYPE: database
+    volumes:
+      - fusionauth:/usr/local/fusionauth/config
+      - ./generated/kickstart.json:/usr/local/fusionauth/kickstart/kickstart.json:ro
+    restart: unless-stopped
+    mem_limit: 420m
+    logging: *log
+
+  authentication-service:
+    <<: *rust
+    command: ["authentication_service"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fusionauth:
+        condition: service_started
+
+  document-storage-service:
+    <<: *rust
+    command: ["document_storage_service"]
+    mem_limit: 640m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      search:
+        condition: service_started
+      kafka:
+        condition: service_started
+      localstack-init:
+        condition: service_completed_successfully
+
+  connection-gateway:
+    <<: *rust
+    command: ["connection_gateway_service"]
+    depends_on:
+      redis:
+        condition: service_started
+      localstack-init:
+        condition: service_completed_successfully
+
+  static-file-service:
+    <<: *rust
+    command: ["static_file_service"]
+    depends_on:
+      localstack-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  document-upload-finalizer:
+    <<: *rust
+    command: ["document_upload_finalizer_local_worker"]
+    depends_on:
+      localstack-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  sync-service:
+    image: ${IMAGE_PREFIX:-macro-selfhost}/sync:${IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: docker/sync-service.Dockerfile
+    env_file: [.env]
+    restart: unless-stopped
+    mem_limit: 256m
+    logging: *log
+
+  lexical-service:
+    image: ${IMAGE_PREFIX:-macro-selfhost}/lexical:${IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: docker/lexical-service.Dockerfile
+      args:
+        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN:-}
+    environment:
+      PORT: 8096
+      INTERNAL_AUTH_KEY: ${INTERNAL_API_SECRET_KEY}
+      SYNC_SERVICE_AUTH_KEY: ${INTERNAL_API_SECRET_KEY}
+      SYNC_SERVICE_URL: http://sync-service:8787
+    restart: unless-stopped
+    mem_limit: 256m
+    logging: *log
+
+  proxy:
+    image: ${IMAGE_PREFIX:-macro-selfhost}/web:${IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: selfhost/Dockerfile.frontend
+      args:
+        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      SELFHOST_GOOGLE: ${SELFHOST_GOOGLE:-false}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+    depends_on:
+      - authentication-service
+      - document-storage-service
+      - sync-service
+      - lexical-service
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *log
+
+volumes:
+  postgres: {}
+  redis: {}
+  kafka: {}
+  search: {}
+  localstack: {}
+  fusionauth: {}
+  caddy: {}

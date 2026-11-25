@@ -1,0 +1,10 @@
+.git
+.jj
+**/target
+**/node_modules
+**/.cache
+**/.vite
+**/dist
+**/.env
+**/.env.*
+selfhost/generated

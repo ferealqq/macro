@@ -1,0 +1,13 @@
+.git
+.jj
+.agents
+.cursor
+.claude
+**/node_modules
+**/target
+**/dist
+**/.cache
+**/.vite
+**/.env
+**/.env.*
+selfhost/generated
