@@ -102,10 +102,15 @@ function resolveProxyOrigin(configured: string | undefined) {
   }
 }
 
-export const SERVER_HOSTS: Servers =
-  import.meta.env.MODE === 'development'
-    ? selectLocalServers()
-    : serverHostRemote;
+// A self-host bundle is a production Vite build that still talks to the
+// same-origin proxy. Hosted production keeps the gateway hostnames.
+const useSameOriginBackend =
+  import.meta.env.MODE === 'development' ||
+  import.meta.env.VITE_SELF_HOST === 'true';
+
+export const SERVER_HOSTS: Servers = useSameOriginBackend
+  ? selectLocalServers()
+  : serverHostRemote;
 
 /**
  * The app talks to a self-contained local stack (`run_local`, `just stack`)
@@ -123,7 +128,12 @@ function proxyServers(): Servers | undefined {
   if (!proxyOrigin || !wsProxyOrigin) return undefined;
   return {
     'auth-service': `${proxyOrigin}/auth`,
-    'auth-logout': serverHostLocal['auth-logout'],
+    // Self-host ends the session on the auth service, then returns to the
+    // app. FusionAuth is not published to the browser.
+    'auth-logout':
+      import.meta.env.VITE_SELF_HOST === 'true'
+        ? `${proxyOrigin}/app/login`
+        : serverHostLocal['auth-logout'],
     'pdf-service': serverHostLocal['pdf-service'], // no local container
     'document-storage-service': `${proxyOrigin}/dss`,
     'websocket-service': `${wsProxyOrigin}/websocket`,
@@ -214,7 +224,10 @@ function selectSyncServiceHost():
       ws: `wss://${overrideHost}`,
     };
   }
-  if (import.meta.env.MODE !== 'development') {
+  if (
+    import.meta.env.MODE !== 'development' &&
+    import.meta.env.VITE_SELF_HOST !== 'true'
+  ) {
     return syncServiceHostRemote;
   }
   const selectedLocalServers: string = import.meta.env.VITE_LOCAL_SERVERS;

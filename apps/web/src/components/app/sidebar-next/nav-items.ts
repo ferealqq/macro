@@ -34,6 +34,7 @@ import PlugIcon from '@icon/system/regular/plug.svg';
 import PulseIcon from '@icon/system/regular/pulse.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import PulseFillIcon from '@phosphor-fill/pulse-fill.svg';
+import { selfHostShowsNav } from '@core/self-host';
 import type { NavIcon } from './nav-glyph';
 import type { SidebarPrefs } from './use-sidebar-prefs';
 
@@ -256,6 +257,7 @@ export const isNavItemAvailable = (
   item: SidebarNextNavItem,
   gates: NavItemGates
 ): boolean => {
+  if (!selfHostShowsNav(item.id)) return false;
   if (item.id === 'notifications') return gates.showNotifications;
   if (item.id === 'for-you') return gates.showForYou;
   if (item.id === 'companies') return gates.showCustomers;

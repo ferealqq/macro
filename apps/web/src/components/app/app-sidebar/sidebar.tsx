@@ -19,6 +19,7 @@ import {
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { selfHostShowsNav } from '@core/self-host';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGoToLeader } from '@components/app/app-sidebar/go-to-leader';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -506,7 +507,7 @@ export const buildSidebarLinks = (
 
   if (showExternal) links = [...links, EXTERNAL_LINK];
 
-  return links;
+  return links.filter((link) => selfHostShowsNav(link.id));
 };
 
 interface SidebarOpenInSplitMenuProps {

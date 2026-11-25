@@ -10,6 +10,7 @@ pub mod model;
 mod outbound;
 mod passwords_cleanup;
 mod released_attachments;
+mod self_host_connectors;
 mod server;
 mod service;
 

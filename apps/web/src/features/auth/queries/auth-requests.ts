@@ -3,6 +3,7 @@ import {
   metaClickHeaders,
 } from '@app/lib/analytics/metaClickIds';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { selfHostEnabled } from '@core/self-host';
 import { platformFetch } from '@core/util/platformFetch';
 import { authServiceClient } from '@service-auth/client';
 import type { SendCodeResult, VerifyCodeResult } from '../context/auth-context';
@@ -35,16 +36,43 @@ export async function sendEmailCode(input: {
   isAgent: boolean;
 }): Promise<SendCodeResult> {
   const { email, password, isAgent } = input;
-  if (await isPasswordLogin(email)) {
+  if (selfHostEnabled() || (await isPasswordLogin(email))) {
     if (!password) return { t: 'password-required' };
     const tokens = await authServiceClient.passwordLogin({ password, email });
-    return tokens.isErr()
-      ? {
+    if (tokens.isOk()) return { t: 'signed-in' };
+    // A self-hosted server creates the account on the first password. An
+    // address that already exists comes back as a conflict, which is a
+    // wrong password from the person's point of view.
+    if (selfHostEnabled()) {
+      const created = await platformFetch(
+        `${SERVER_HOSTS['auth-service']}/login/signup`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        }
+      ).catch(() => undefined);
+      if (created?.ok) return { t: 'signed-in' };
+      if (created?.status === 409) {
+        return {
           t: 'failed',
           message:
             'Failed to login. Check your email and password then try again.',
-        }
-      : { t: 'signed-in' };
+        };
+      }
+      const message = created
+        ? await created.text().catch(() => '')
+        : 'Unable to reach Macro.';
+      return {
+        t: 'failed',
+        message: message || 'Unable to create the account.',
+      };
+    }
+    return {
+      t: 'failed',
+      message:
+        'Failed to login. Check your email and password then try again.',
+    };
   }
 
   const referral_code = referralCode();

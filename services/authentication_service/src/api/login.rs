@@ -13,6 +13,7 @@ use super::middleware;
 pub(in crate::api) mod apple;
 pub(in crate::api) mod password;
 pub(in crate::api) mod passwordless;
+pub(in crate::api) mod signup;
 pub(in crate::api) mod sso;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
@@ -34,6 +35,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/password",
             post(password::handler).layer(ServiceBuilder::new().layer(CookieManagerLayer::new())),
+        )
+        .route(
+            "/signup",
+            post(signup::handler).layer(ServiceBuilder::new().layer(CookieManagerLayer::new())),
         )
         .route(
             "/apple",

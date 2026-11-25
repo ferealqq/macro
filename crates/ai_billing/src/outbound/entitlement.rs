@@ -175,6 +175,18 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn entitlement(&self, user: &MacroUserIdStr<'_>) -> Result<Entitlement> {
         let user_owned = user.clone().into_owned();
+        // Self-host does not run Stripe. Every account is an unlimited Max
+        // seat, including members of a team that has no subscription row.
+        if roles_and_permissions::domain::self_host::enabled() {
+            return Ok(Entitlement {
+                tier: PlanTier::Max,
+                seat_tiers: vec![PlanTier::Max],
+                unlimited: true,
+                payer: user_owned.clone(),
+                billed_users: vec![user_owned],
+                scope: PayerScope::Personal,
+            });
+        }
         let own_tier = self.tier_of(user).await?;
 
         let teams = self

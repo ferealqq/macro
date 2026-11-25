@@ -51,7 +51,10 @@ mod threads;
 // auth based constants
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
-pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(
+    state: ApiContext,
+    self_host_connectors: Option<Router>,
+) -> anyhow::Result<()> {
     let sync_sessions = state.sync_sessions.clone();
     let correlation = agent_correlation::inbound::CorrelationState::new(
         state.db.clone(),
@@ -91,7 +94,8 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .merge(
             SwaggerUi::new("/dss/docs")
                 .url("/dss/api-doc/openapi.json", swagger::ApiDoc::openapi()),
-        );
+        )
+        .merge(self_host_connectors.unwrap_or_default());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", state.config.port))
         .await

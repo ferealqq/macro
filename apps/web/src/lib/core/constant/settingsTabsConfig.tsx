@@ -31,6 +31,7 @@ import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import { getPlatform, isPlatform } from '../util/platform';
+import { selfHostShowsSettings } from '@core/self-host';
 import { DEV_MODE_ENV, ENABLE_EMAIL } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -416,6 +417,7 @@ export const useSettingsTabAvailable = () => {
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
+    if (!selfHostShowsSettings(tab)) return false;
     switch (tab) {
       case 'Appearance':
       case 'Account':

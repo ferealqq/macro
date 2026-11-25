@@ -1,3 +1,4 @@
+import { selfHostEnabled } from '@core/self-host';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
@@ -47,7 +48,9 @@ export function createEmailLogin(
   );
   const [email, setEmail] = createSignal(options.initialEmail ?? '');
   const [password, setPassword] = createSignal('');
-  const [passwordRequired, setPasswordRequired] = createSignal(false);
+  const [passwordRequired, setPasswordRequired] = createSignal(
+    selfHostEnabled()
+  );
   const [sending, setSending] = createSignal(false);
   const [sendError, setSendError] = createSignal<string | undefined>(
     options.fallbackNotice
@@ -129,7 +132,8 @@ export function createEmailLogin(
     try {
       const result = await context.sendEmailCode({
         email: address,
-        password: passwordRequired() ? password() : undefined,
+        password:
+          passwordRequired() || selfHostEnabled() ? password() : undefined,
         isAgent: options.intent === 'agent-signup',
       });
       switch (result.t) {

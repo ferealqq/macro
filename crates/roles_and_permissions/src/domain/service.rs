@@ -102,13 +102,18 @@ where
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<std::collections::HashSet<super::model::PermissionId>, UserRolesAndPermissionsError>
     {
-        Ok(self
+        let mut permissions: std::collections::HashSet<_> = self
             .user_roles_and_permissions_repository
             .get_user_permissions(user_id)
             .await?
             .into_iter()
             .map(|p| p.id)
-            .collect())
+            .collect();
+        // Self-host has no billing service to grant these roles.
+        if super::self_host::enabled() {
+            super::self_host::augment_permissions(&mut permissions);
+        }
+        Ok(permissions)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -116,8 +121,13 @@ where
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<std::collections::HashSet<RoleId>, UserRolesAndPermissionsError> {
-        self.user_roles_and_permissions_repository
+        let mut roles = self
+            .user_roles_and_permissions_repository
             .get_user_roles(user_id)
-            .await
+            .await?;
+        if super::self_host::enabled() {
+            super::self_host::augment_roles(&mut roles);
+        }
+        Ok(roles)
     }
 }

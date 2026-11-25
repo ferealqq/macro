@@ -1,4 +1,5 @@
 import { SearchBar } from '@app/components/view-shell';
+import { selfHostEnabled } from '@core/self-host';
 import { toast } from '@core/component/Toast/Toast';
 import {
   clearPendingConnectApp,
@@ -249,13 +250,16 @@ function IntegrationsOverview(
     [...emailItems(), ...otherItems].filter(
       (item) =>
         (props.agentToolsAvailable || !agentTools.includes(item)) &&
+        (!selfHostEnabled() || item.id === 'github' || item.id === 'slack') &&
         matchesIntegration(item, query())
     );
   const inUse = () => matching().filter((item) => item.status !== 'available');
   const available = () =>
     matching().filter((item) => item.status === 'available');
   const leftovers = () =>
-    props.model().leftovers.filter((row) => leftoverMatches(row, query()));
+    selfHostEnabled()
+      ? []
+      : props.model().leftovers.filter((row) => leftoverMatches(row, query()));
   // Servers the user added themselves lead the list.
   const customLeftovers = () =>
     leftovers().filter((leftover) => leftover.kind === 'server');
@@ -279,7 +283,7 @@ function IntegrationsOverview(
       ])
   );
   const catalogEntries = createMemo(() =>
-    props.agentToolsAvailable
+    !selfHostEnabled() && props.agentToolsAvailable
       ? catalog.entries().filter(
           (entry) =>
             !alreadyHave().has(entry.slug) &&
@@ -312,7 +316,7 @@ function IntegrationsOverview(
           onEscape={() => search('')}
           class="min-w-0 flex-1"
         />
-        <Show when={props.agentToolsAvailable}>
+        <Show when={props.agentToolsAvailable && !selfHostEnabled()}>
           <Button
             variant="secondary"
             size="md"
